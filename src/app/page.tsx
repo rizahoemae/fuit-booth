@@ -1,18 +1,18 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Icon from "@mdi/react";
 import { mdiRefresh } from "@mdi/js";
 // import ShutterSound from "../../public/shutter-sound.m4a";
 export default function Home() {
-  const video = useRef(null);
+  const video = useRef<HTMLVideoElement>(null);
   const [timer, setTimer] = useState(3);
   const [runTimer, setRunTimer] = useState(false);
   const [attemptTake, setAttemptTake] = useState(0);
   const [maxAttempt, setMaxAttempt] = useState(3);
   const [resetIndex, setResetIndex] = useState<number | null>(null);
-  const [photos, setPhotos] = useState([]);
+  const [photos, setPhotos] = useState<(HTMLCanvasElement | null)[]>([]);
   const [blink, setBlink] = useState(false);
-  const truthyNumber = (value) => {
+  const truthyNumber = (value: number | null) => {
     if (value || value === 0) {
       return true;
     } else {
@@ -23,8 +23,10 @@ export default function Home() {
     navigator.mediaDevices
       .getUserMedia({ video: true, audio: false })
       .then((stream) => {
-        video.current.srcObject = stream;
-        video.current.play();
+        if (video.current) {
+          video.current.srcObject = stream;
+          video.current.play();
+        }
       })
       .catch((err) => {
         console.error(`An error occurred: ${err}`);
@@ -35,16 +37,21 @@ export default function Home() {
 
   const savePicture = () => {
     const canvas = document.createElement("canvas");
-    canvas.height = video.current.videoHeight;
-    canvas.width = video.current.videoWidth;
+    canvas.width = video.current?.videoWidth ?? 0;
+    canvas.height = video.current?.videoHeight ?? 0;
+
     const context = canvas.getContext("2d");
-    context.translate(canvas.width, 0);
-    context.scale(-1, 1);
-    context.drawImage(video.current, 0, 0, canvas.width, canvas.height);
-    console.log(resetIndex);
-    if (truthyNumber(resetIndex)) {
+    if (context) {
+      context.translate(canvas.width, 0);
+      context.scale(-1, 1);
+      if (video.current) {
+        context.drawImage(video.current, 0, 0, canvas.width, canvas.height);
+      }
+    }
+
+    if (truthyNumber(resetIndex ?? null)) {
       const currentPhotos = [...photos];
-      currentPhotos[resetIndex] = canvas;
+      currentPhotos[resetIndex ?? 0] = canvas;
       setPhotos(currentPhotos);
       setResetIndex(null);
     } else {
@@ -89,14 +96,21 @@ export default function Home() {
   const resetPhoto = (idx: number) => {
     setResetIndex(idx);
     const currentPhotos = [...photos];
-    currentPhotos[idx] = null;
+    currentPhotos[idx ?? 0] = null;
     setPhotos(currentPhotos);
   };
   const playShutter = () => {
     const audio = new Audio("/shutter-sound.m4a");
     audio.play();
   };
-  const drawImageCover = (ctx, img, canvasWidth, canvasHeight, dx, dy) => {
+  const drawImageCover = (
+    ctx: CanvasRenderingContext2D,
+    img: HTMLCanvasElement,
+    canvasWidth: number,
+    canvasHeight: number,
+    dx: number,
+    dy: number
+  ) => {
     const imageWidth = img.width;
     const imageHeight = img.height;
 
@@ -135,10 +149,13 @@ export default function Home() {
 
     mergedCanvas.width = 591;
     const mergedCtx = mergedCanvas.getContext("2d");
-    mergedCtx.fillStyle = "white"; // Or ctx.fillStyle = "#FFFFFF";
-    mergedCtx.fillRect(0, 0, mergedCanvas.width, mergedCanvas.height);
+    if (mergedCtx) {
+      mergedCtx.fillStyle = "white";
+      mergedCtx.fillRect(0, 0, mergedCanvas.width, mergedCanvas.height);
+    }
+
     const padding = 59.5;
-    let currentX = padding;
+    const currentX = padding;
     let currentY = padding;
 
     const sizeImage = {
@@ -146,21 +163,17 @@ export default function Home() {
       height: 472,
     };
     photos.forEach((item) => {
-      drawImageCover(
-        mergedCtx,
-        item,
-        sizeImage.width,
-        sizeImage.height,
-        currentX,
-        currentY
-      );
-      // mergedCtx.drawImage(
-      //   item,
-      //   currentX,
-      //   currentY,
-      //   sizeImage.width,
-      //   sizeImage.height
-      // );
+      if (mergedCtx && item) {
+        drawImageCover(
+          mergedCtx,
+          item,
+          sizeImage.width,
+          sizeImage.height,
+          currentX,
+          currentY
+        );
+      }
+
       currentY += sizeImage.height + padding;
     });
     const img = new Image();
@@ -168,46 +181,82 @@ export default function Home() {
     const timestampMs = Date.now();
 
     mergedCanvas.toBlob(function (blob) {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `canvas-${timestampMs}`;
-      a.click();
-      URL.revokeObjectURL(url);
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `canvas-${timestampMs}`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
     }, "image/png");
   };
+
+  // countdown
   useEffect(() => {
-    let intervalId;
-    if (runTimer && timer > 0 && attemptTake < maxAttempt) {
-      intervalId = setInterval(() => {
-        setTimer((t) => t - 1);
-      }, 1000);
-    } else if (timer == 0 && attemptTake < maxAttempt) {
-      setBlink(true);
-      savePicture();
-      playShutter();
-      setAttemptTake((prevAtt) => prevAtt + 1);
-      setTimer(3);
-      setTimeout(() => {
-        setBlink(false);
-      }, 150);
+    if (!runTimer || attemptTake >= maxAttempt) {
+      console.log("❌ Early return: runTimer or maxAttempt");
+
+      return;
     }
 
-    if (attemptTake == maxAttempt) {
-      // createStrip();
-      setAttemptTake(0);
-      setRunTimer(false);
-      // setPhotos([]);
+    if (timer <= 0) {
+      console.log("❌ Early return: timer <= 0");
+
+      return;
     }
+    const id = window.setInterval(() => {
+      setTimer((t) => {
+        if (t <= 0) return 0;
+        return t - 1;
+      });
+    }, 1000);
+
     return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
+      clearInterval(id);
     };
-  }, [runTimer, timer]);
+  }, [runTimer, attemptTake, maxAttempt, timer]);
+
+  //kudu pakai usecallback kalo dia dijadiin dependency di useeffect. catat za :D
+  const captureOne = useCallback(() => {
+    setBlink(true);
+    savePicture();
+    playShutter();
+    setAttemptTake((prevAtt) => prevAtt + 1);
+    setTimeout(() => setBlink(false), 150);
+    setTimer(3);
+  }, [savePicture, playShutter]);
+
+  useEffect(() => {
+    if (!runTimer || attemptTake >= maxAttempt) return;
+    if (timer !== 0) return;
+
+    const timeoutCapture = setTimeout(() => {
+      captureOne();
+    }, 200);
+
+    return () => {
+      clearTimeout(timeoutCapture);
+    };
+  }, [timer, runTimer, attemptTake, maxAttempt, captureOne]);
+
+  const stopCapture = useCallback(() => {
+    setAttemptTake(0);
+    setRunTimer(false);
+  }, []);
+
+  useEffect(() => {
+    console.log({ attemptTake, maxAttempt });
+    if (attemptTake !== maxAttempt) return;
+    const timeoutStop = setTimeout(() => {
+      stopCapture();
+    }, 200);
+
+    return () => clearTimeout(timeoutStop);
+  }, [attemptTake, maxAttempt, stopCapture]);
 
   const countdown = () => {
-    if (truthyNumber(resetIndex)) {
+    if (truthyNumber(resetIndex ?? null)) {
       countdownReset();
     } else {
       setRunTimer((prevRun) => (prevRun = !prevRun));
