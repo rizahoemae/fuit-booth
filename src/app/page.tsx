@@ -12,7 +12,7 @@ export default function Home() {
   const [runTimer, setRunTimer] = useState(false);
   const [attemptTake, setAttemptTake] = useState(0);
   const [maxAttempt, setMaxAttempt] = useState(3);
-  const [filter, setFilter] = useState<string | null>("none");
+  const [filter, setFilter] = useState<string>("none");
   const [resetIndex, setResetIndex] = useState<number | null>(null);
   const [photos, setPhotos] = useState<(HTMLCanvasElement | null)[]>([]);
   const [video, setVideo] = useState();
@@ -43,7 +43,13 @@ export default function Home() {
     });
   }, [setMediaDevices, setSelectedMedia]);
 
-  const filterEffects = {
+  interface objectFilter {
+    label: string;
+    filter: string;
+    css: string;
+  }
+
+  const filterEffects: Record<string, objectFilter> = {
     none: {
       label: "None",
       filter: "",
@@ -145,13 +151,13 @@ export default function Home() {
     }
   };
 
-  const collectVideo = (event) => {
+  const collectVideo = (event: BlobEvent) => {
     if (event.data && event.data.size > 0) {
       recordedBlobs.push(event.data);
     }
   };
 
-  const stopVideo = (event) => {
+  const stopVideo = (event: Event) => {
     const superBuffer = new Blob(recordedBlobs, {
       type: mediaRecorder?.current?.mimeType,
     });
@@ -267,7 +273,8 @@ export default function Home() {
       }
     }, "image/png");
     mediaRecorder?.current?.stop();
-    videoRef?.current?.srcObject?.getTracks().forEach((track) => track.stop()); // Stop all media tracks
+    const stream = videoRef?.current?.srcObject as MediaStream;
+    stream.getTracks().forEach((track) => track.stop());
   };
 
   // countdown
