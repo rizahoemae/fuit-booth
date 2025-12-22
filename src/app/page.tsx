@@ -67,9 +67,11 @@ export default function Home() {
   };
 
   const shareStream = (stream: MediaStream) => {
-    const videoElements = Object.keys(filterEffects).map((item) =>
+    const genericElements = Object.keys(filterEffects).map((item) =>
       document.getElementById(`preview-${item}`)
     );
+
+    const videoElements = genericElements as (HTMLVideoElement | null)[];
 
     videoElements.forEach((video) => {
       if (video) {
