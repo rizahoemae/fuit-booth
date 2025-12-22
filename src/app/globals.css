@@ -40,3 +40,18 @@ body {
 .reset-container:hover .reset-element {
   display: flex;
 }
+select {
+  border: 1px solid #dddddd;
+  border-radius: 0.5rem;
+  background: white;
+  padding: 0.5rem;
+  transition: 0.4s;
+  /* -moz-appearance: none;
+  -webkit-appearance: none; 
+  appearance: none; */
+}
+
+select:hover,
+select:focus {
+  background: #dddddd;
+}
