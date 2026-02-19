@@ -6,9 +6,10 @@ import Navbar from "./ui/navbar";
 // import ShutterSound from "../../public/shutter-sound.m4a";
 export default function Home() {
   const videoRef = useRef<HTMLVideoElement>(null);
+  //input user
   const [timer, setTimer] = useState(3);
+  //logic countdown
   const [countdownTimer, setCountdownTimer] = useState(3);
-
   const [runTimer, setRunTimer] = useState(false);
   const [attemptTake, setAttemptTake] = useState(0);
   const [maxAttempt, setMaxAttempt] = useState(3);
@@ -17,7 +18,7 @@ export default function Home() {
   const [photos, setPhotos] = useState<(HTMLCanvasElement | null)[]>([]);
   const [video, setVideo] = useState();
   const [mediaDevices, setMediaDevices] = useState<(MediaDeviceInfo | null)[]>(
-    []
+    [],
   );
   const [selectedMedia, setSelectedMedia] = useState<string | null>(null);
   const recordedBlobs: Blob[] = [];
@@ -30,11 +31,16 @@ export default function Home() {
       return false;
     }
   };
+  const resetAll = () => {
+    setAttemptTake(0);
+    setPhotos([]);
+    setFilter("none");
+  };
 
   useEffect(() => {
     navigator.mediaDevices.enumerateDevices().then((devices) => {
       const videoInputs = devices.filter(
-        (device) => device.kind === "videoinput"
+        (device) => device.kind === "videoinput",
       );
       setMediaDevices(videoInputs);
       if (!selectedMedia) {
@@ -67,14 +73,14 @@ export default function Home() {
     },
     grayscale: {
       label: "Grayscale",
-      filter: "grayscale brightness(90%) contrast(125%)",
+      filter: "grayscale(100%) brightness(90%) contrast(125%)",
       css: "grayscale brightness-90 contrast-125",
     },
   };
 
   const shareStream = (stream: MediaStream) => {
     const genericElements = Object.keys(filterEffects).map((item) =>
-      document.getElementById(`preview-${item}`)
+      document.getElementById(`preview-${item}`),
     );
 
     const videoElements = genericElements as (HTMLVideoElement | null)[];
@@ -86,34 +92,29 @@ export default function Home() {
       }
     });
   };
-  useEffect(() => {
-    navigator.mediaDevices
-      .getUserMedia({
-        video: true,
-      })
-      .then((stream) => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play();
-          shareStream(stream);
 
-          // Merge audio from the original stream (canvas stream has no audio)
-          // const combinedStream = new MediaStream([
-          //   ...canvasStream.getVideoTracks(),
-          //   ...videoRef.current.srcObject.getAudioTracks(),
-          // ]);
-          const options = { mimeType: "video/webm;codecs=vp9,opus" };
-          try {
-            mediaRecorder.current = new MediaRecorder(stream, options);
-          } catch (error) {
-            console.error("Exception while creating MediaRecorder:", error);
-            return;
-          }
-        }
-      })
-      .catch((err) => {
-        console.error(`An error occurred: ${err}`);
-      });
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+        shareStream(stream);
+        const options = { mimeType: "video/webm;codecs=vp9,opus" };
+        mediaRecorder.current = new MediaRecorder(stream, options);
+      }
+    } catch (err) {
+      console.error(`Gagal akses kamera: ${err}`);
+    }
+  };
+  const stopCamera = () => {
+    mediaRecorder?.current?.stop();
+    const stream = videoRef?.current?.srcObject as MediaStream;
+    stream.getTracks().forEach((track) => track.stop());
+  };
+  useEffect(() => {
+    startCamera();
   }, []);
 
   // const dpi = 72 / 2.54;
@@ -127,18 +128,25 @@ export default function Home() {
     if (context) {
       context.translate(canvas.width, 0);
       context.scale(-1, 1);
+      console.log(filter);
+      console.log(filterEffects[filter].filter);
+      console.log({ videoRef: videoRef.current });
       if (videoRef.current) {
+        console.log("hi");
         context.filter = filterEffects[filter].filter;
         context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
       }
+      console.log({ ctx: context.filter });
     }
 
+    // jika reset
     if (truthyNumber(resetIndex ?? null)) {
       const currentPhotos = [...photos];
       currentPhotos[resetIndex ?? 0] = canvas;
       setPhotos(currentPhotos);
       setResetIndex(null);
     } else {
+      // append jika countdown biasa
       setPhotos([...photos, canvas]);
     }
   };
@@ -191,7 +199,7 @@ export default function Home() {
     canvasWidth: number,
     canvasHeight: number,
     dx: number,
-    dy: number
+    dy: number,
   ) => {
     const imageWidth = img.width;
     const imageHeight = img.height;
@@ -222,10 +230,11 @@ export default function Home() {
       dx,
       dy,
       canvasWidth,
-      canvasHeight
+      canvasHeight,
     );
   };
   const createStrip = () => {
+    stopCamera();
     const mergedCanvas = document.createElement("canvas");
     mergedCanvas.height = 1772;
 
@@ -252,7 +261,7 @@ export default function Home() {
           sizeImage.width,
           sizeImage.height,
           currentX,
-          currentY
+          currentY,
         );
       }
 
@@ -272,9 +281,7 @@ export default function Home() {
         URL.revokeObjectURL(url);
       }
     }, "image/png");
-    mediaRecorder?.current?.stop();
-    const stream = videoRef?.current?.srcObject as MediaStream;
-    stream.getTracks().forEach((track) => track.stop());
+    startCamera();
   };
 
   // countdown
@@ -324,11 +331,14 @@ export default function Home() {
   const stopCapture = useCallback(() => {
     setAttemptTake(0);
     setRunTimer(false);
+    mediaRecorder?.current?.pause();
   }, []);
 
   useEffect(() => {
     console.log({ attemptTake, maxAttempt });
+    //kalo blm maksimal, return
     if (attemptTake !== maxAttempt) return;
+    // kalo udah, stop capture
     const timeoutStop = setTimeout(() => {
       stopCapture();
     }, 200);
@@ -337,12 +347,14 @@ export default function Home() {
   }, [attemptTake, maxAttempt, stopCapture]);
 
   const countdown = () => {
-    startVideo();
     // if reset
     if (truthyNumber(resetIndex ?? null)) {
+      mediaRecorder?.current?.resume();
       countdownReset();
     } else {
       // if not reset
+      startVideo();
+
       setRunTimer((prevRun) => (prevRun = !prevRun));
     }
   };
@@ -474,12 +486,20 @@ export default function Home() {
               </div>
 
               {photos.length == 3 && resetIndex === null ? (
-                <button
-                  onClick={createStrip}
-                  className="rounded-lg bg-secondary p-2 w-1/2 mt-6 cursor-pointer text-primary"
-                >
-                  Save progress
-                </button>
+                <div className="w-full space-x-5 mt-6 items-center justify-center flex">
+                  <button
+                    onClick={createStrip}
+                    className="rounded-lg bg-secondary p-2 w-full cursor-pointer text-primary"
+                  >
+                    Save progress
+                  </button>
+                  <button
+                    onClick={() => resetAll()}
+                    className="rounded-lg border border-secondary p-2 cursor-pointer text-primary"
+                  >
+                    <Icon path={mdiRefresh} size={1}></Icon>
+                  </button>
+                </div>
               ) : (
                 <button
                   onClick={countdown}
